@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Cloud Image Upload and Management Service
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 128
+    Runtime: python3.12
+    Environment:
+      Variables:
+        DYNAMODB_TABLE: images
+        S3_BUCKET: monty-cloud-images
+
+Resources:
+  ImageUploadApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+
+  ImageUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers/upload.handler
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref S3Bucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImagesTable
+      Events:
+        Upload:
+          Type: Api
+          Properties:
+            Path: /images/upload
+            Method: post
+            RestApiId: !Ref ImageUploadApi
+
+  ListImagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers/list.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ImagesTable
+      Events:
+        List:
+          Type: Api
+          Properties:
+            Path: /images
+            Method: get
+            RestApiId: !Ref ImageUploadApi
+
+  GetImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers/get.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ImagesTable
+        - S3ReadPolicy:
+            BucketName: !Ref S3Bucket
+      Events:
+        Get:
+          Type: Api
+          Properties:
+            Path: /images/{image_id}
+            Method: get
+            RestApiId: !Ref ImageUploadApi
+
+  DeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers/delete.handler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref S3Bucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImagesTable
+      Events:
+        Delete:
+          Type: Api
+          Properties:
+            Path: /images/{image_id}
+            Method: delete
+            RestApiId: !Ref ImageUploadApi
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: monty-cloud-images
+
+  ImagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: images
+      AttributeDefinitions:
+        - AttributeName: image_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: image_id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
